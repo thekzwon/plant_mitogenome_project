@@ -1,0 +1,622 @@
+---
+title: "plant_project_stats_figures"
+output: html_document
+date: "2023-10-10"
+---
+
+# Genome copy number predicts extreme evolutionary rate variation in plant mitochondrial DNA
+
+### Getting Everything Setup, installing packages
+
+```{r,echo=FALSE}
+library(ape)
+library(phangorn) #dependency for geiger
+library(nlme)
+library(phytools)
+library(Rcpp) #dependency for geiger
+library(geiger)
+library(lme4)
+library(ggbreak)
+library(tidyverse)
+library(ggpubr)
+library(gridExtra)
+```
+
+### Importing datasets
+
+This analysis needs a tree as well as the dataset. The csv file has the info for the plastid and mt copy number and rates as well as other factors. It already has Silene undulata and Aragoa abietina removed due to terminal branch divergence times of less than 1my. Pelargonium Nanum was also removed from this csv for lack of terminal branch length.
+
+The tree is the matk tree which was run in raxml. Asscession numbers are in the supplement.
+
+```{r}
+#Read in the tree
+tree<-read.nexus('matk_tree_with_groups')  # 'read.tree' also works for some formats
+
+#Read in the dataset
+dataset_dr_brnch_c_and_seq_est<-read.csv('main_data.csv')
+```
+
+#Code to drop these species from the tree.
+
+```{r}
+#Define a list of tip species to drop from the tree -- the species with NAs. Use double quotes around any names with single quotes.
+#These are the species that had short branches
+tips_tree_1=c("Aragoa_abietina",
+              "Silene_undulata", "Pelargonium_nanum"
+)
+
+#Remove tips
+tree_1<-drop.tip(phy=tree, tips_tree_1)
+
+tree_1$edge.length<-rep(1,114)  ##IMPORTANT this line makes the tree have equal branch lengths.
+
+#Check that tip-removal worked
+plot(tree_1,cex=0.3  )
+```
+
+This generates the Brownian motion matrix using the tree.
+
+```{r}
+species = dataset_dr_brnch_c_and_seq_est$Species
+bm.dataset_dr_brnch_c_and_seq_est<-corBrownian(phy=tree_1,form=~species)
+```
+
+C value data import
+
+```{r}
+####C val estimates
+copy_dataset_dropped_tips_c_val<-read.csv('c_value.csv') 
+
+#This is myddpcr data
+copy_data<- read_csv("08_26_22_per_sample_copy_data_ddpcr.csv")
+```
+
+## Copy number and rate correlations
+
+### Mito Correlations with copy number and Rate
+
+Mito raw data, regular linear model.
+
+```{r}
+mito_lm_rate_copy <- summary(lm(mt_ds_div_mya~mito_copy,data=dataset_dr_brnch_c_and_seq_est))
+
+mito_lm_rate_copy_t <- mito_lm_rate_copy$coefficients[2,][3]
+mito_lm_rate_copy_p <- mito_lm_rate_copy$coefficients[2,][4]
+```
+
+Mito raw data, PGLS.
+
+```{r}
+mito_gls_rate_copy <- summary(gls(mt_ds_div_mya~mito_copy,data=dataset_dr_brnch_c_and_seq_est,correlation = bm.dataset_dr_brnch_c_and_seq_est)) 
+
+mito_gls_rate_copy_t <- mito_gls_rate_copy$tTable[2,][3]
+mito_gls_rate_copy_p <- mito_gls_rate_copy$tTable[2,][4]
+```
+
+Mito log10 data, regular linear model.
+
+```{r}
+mito_log_lm_rate_copy <- summary(lm(log10(mt_ds_div_mya)~log10(mito_copy),data=dataset_dr_brnch_c_and_seq_est))
+
+mito_log_lm_rate_copy_t <- mito_log_lm_rate_copy$coefficients[2,][3]
+mito_log_lm_rate_copy_p <- mito_log_lm_rate_copy$coefficients[2,][4]
+```
+
+Mito log10 data, PGLS.
+
+```{r}
+mito_log_gls_rate_copy <- summary(gls(log10(mt_ds_div_mya)~log10(mito_copy),data=dataset_dr_brnch_c_and_seq_est,correlation = bm.dataset_dr_brnch_c_and_seq_est))
+
+mito_log_gls_rate_copy_t <- mito_log_gls_rate_copy$tTable[2,][3]
+mito_log_gls_rate_copy_p <- mito_log_gls_rate_copy$tTable[2,][4]
+```
+
+### Plastid Correlations with copy number and Rate
+
+Plastid raw data, regular linear model.
+
+```{r}
+pt_lm_rate_copy <- summary(lm(pt_ds_div_mya~plastid_copy,data=dataset_dr_brnch_c_and_seq_est)) 
+
+pt_lm_rate_copy_t <- pt_lm_rate_copy$coefficients[2,][3]
+pt_lm_rate_copy_p <- pt_lm_rate_copy$coefficients[2,][4]
+```
+
+Plastid raw data, PGLS.
+
+```{r}
+pt_gls_rate_copy <- summary(gls(pt_ds_div_mya~plastid_copy,data=dataset_dr_brnch_c_and_seq_est,correlation = bm.dataset_dr_brnch_c_and_seq_est))
+
+pt_gls_rate_copy_t <- pt_gls_rate_copy$tTable[2,][3]
+pt_gls_rate_copy_p <- pt_gls_rate_copy$tTable[2,][4]
+```
+
+Plastid log10 data, regular linear model.
+
+```{r}
+pt_log_lm_rate_copy <- summary(lm(log10(pt_ds_div_mya)~log10(plastid_copy),data=dataset_dr_brnch_c_and_seq_est))
+
+pt_log_lm_rate_copy_t <- pt_log_lm_rate_copy$coefficients[2,][3]
+pt_log_lm_rate_copy_p <- pt_log_lm_rate_copy$coefficients[2,][4]
+```
+
+Plastid log10 data, PGLS.
+
+```{r}
+pt_log_gls_rate_copy <- summary(gls(log10(pt_ds_div_mya)~log10(plastid_copy),data=dataset_dr_brnch_c_and_seq_est,correlation = bm.dataset_dr_brnch_c_and_seq_est))
+
+pt_log_gls_rate_copy_t <- pt_log_gls_rate_copy$tTable[2,][3]
+pt_log_gls_rate_copy_p <- pt_log_gls_rate_copy$tTable[2,][4]
+```
+
+## Copy number and genome size correlations
+
+### Mito Correlations with copy number and genome size
+
+Mito raw data, regular linear model.
+
+```{r}
+mito_lm_genome_copy <- summary(lm(mt_genome_estimate/1000~mito_copy,data=dataset_dr_brnch_c_and_seq_est))
+
+mito_lm_genome_copy_t <- mito_lm_genome_copy$coefficients[2,][3]
+mito_lm_genome_copy_p <- mito_lm_genome_copy$coefficients[2,][4]
+```
+
+Mito raw data, PGLS.
+
+```{r}
+mito_gls_genome_copy <- summary(gls(mt_genome_estimate/1000~mito_copy,data=dataset_dr_brnch_c_and_seq_est,correlation = bm.dataset_dr_brnch_c_and_seq_est)) 
+
+mito_gls_genome_copy_t <- mito_gls_genome_copy$tTable[2,][3]
+mito_gls_genome_copy_p <- mito_gls_genome_copy$tTable[2,][4]
+```
+
+Mito log10 data, regular linear model.
+
+```{r}
+mito_log_lm_genome_copy <- summary(lm(log10(mt_genome_estimate/1000)~log10(mito_copy),data=dataset_dr_brnch_c_and_seq_est))
+
+mito_log_lm_genome_copy_t <- mito_log_lm_genome_copy$coefficients[2,][3]
+mito_log_lm_genome_copy_p <- mito_log_lm_genome_copy$coefficients[2,][4]
+```
+
+Mito log10 data, PGLS.
+
+```{r}
+mito_log_gls_genome_copy <- summary(gls(log10(mt_genome_estimate/1000)~log10(mito_copy),data=dataset_dr_brnch_c_and_seq_est,correlation = bm.dataset_dr_brnch_c_and_seq_est))
+
+mito_log_gls_genome_copy_t <- mito_log_gls_genome_copy$tTable[2,][3]
+mito_log_gls_genome_copy_p <- mito_log_gls_genome_copy$tTable[2,][4]
+```
+
+### Plastid Correlations with copy number and genome size
+
+Plastid raw data, regular linear model.
+
+```{r}
+pt_lm_genome_copy <- summary(lm(plastome_length/1000~plastid_copy,data=dataset_dr_brnch_c_and_seq_est)) 
+
+pt_lm_genome_copy_t <- pt_lm_genome_copy$coefficients[2,][3]
+pt_lm_genome_copy_p <- pt_lm_genome_copy$coefficients[2,][4]
+```
+
+Plastid raw data, PGLS.
+
+```{r}
+pt_gls_genome_copy <- summary(gls(plastome_length/1000~plastid_copy,data=dataset_dr_brnch_c_and_seq_est,correlation = bm.dataset_dr_brnch_c_and_seq_est))
+
+pt_gls_genome_copy_t <- pt_gls_genome_copy$tTable[2,][3]
+pt_gls_genome_copy_p <- pt_gls_genome_copy$tTable[2,][4]
+```
+
+Plastid log10 data, regular linear model.
+
+```{r}
+pt_log_lm_genome_copy <- summary(lm(log10(plastome_length/1000)~log10(plastid_copy),data=dataset_dr_brnch_c_and_seq_est))
+
+pt_log_lm_genome_copy_t <- pt_log_lm_genome_copy$coefficients[2,][3]
+pt_log_lm_genome_copy_p <- pt_log_lm_genome_copy$coefficients[2,][4]
+```
+
+Plastid log10 data, PGLS.
+
+```{r}
+pt_log_gls_genome_copy <- summary(gls(log10(plastome_length/1000)~log10(plastid_copy),data=dataset_dr_brnch_c_and_seq_est,correlation = bm.dataset_dr_brnch_c_and_seq_est))
+
+pt_log_gls_genome_copy_t <- pt_log_gls_genome_copy$tTable[2,][3]
+pt_log_gls_genome_copy_p <- pt_log_gls_genome_copy$tTable[2,][4]
+```
+
+## Rate and genome size correlations
+
+### Mito Correlations with genome size and rate
+
+Mito raw data, regular linear model.
+
+```{r}
+mito_lm_genome_rate <- summary(lm(mt_ds_div_mya~I(mt_genome_estimate/1000),data=dataset_dr_brnch_c_and_seq_est))
+
+mito_lm_genome_rate_t <- mito_lm_genome_rate$coefficients[2,][3]
+mito_lm_genome_rate_p <- mito_lm_genome_rate$coefficients[2,][4]
+```
+
+Mito raw data, PGLS.
+
+```{r}
+mito_gls_genome_rate <- summary(gls(mt_ds_div_mya~I(mt_genome_estimate/1000),data=dataset_dr_brnch_c_and_seq_est,correlation = bm.dataset_dr_brnch_c_and_seq_est)) 
+
+mito_gls_genome_rate_t <- mito_gls_genome_rate$tTable[2,][3]
+mito_gls_genome_rate_p <- mito_gls_genome_rate$tTable[2,][4]
+```
+
+Mito log10 data, regular linear model.
+
+```{r}
+mito_log_lm_genome_rate <- summary(lm(log10(mt_ds_div_mya)~log10(mt_genome_estimate/1000),data=dataset_dr_brnch_c_and_seq_est))
+
+mito_log_lm_genome_rate_t <- mito_log_lm_genome_rate$coefficients[2,][3]
+mito_log_lm_genome_rate_p <- mito_log_lm_genome_rate$coefficients[2,][4]
+```
+
+Mito log10 data, PGLS.
+
+```{r}
+
+mito_log_gls_genome_rate<-summary(gls(log10(mt_ds_div_mya)~log10(mt_genome_estimate/1000),data=dataset_dr_brnch_c_and_seq_est,correlation = bm.dataset_dr_brnch_c_and_seq_est))
+
+mito_log_gls_genome_rate_t <- mito_log_gls_genome_rate$tTable[2,][3]
+mito_log_gls_genome_rate_p <- mito_log_gls_genome_rate$tTable[2,][4]
+```
+
+### Plastid Correlations with genome size and rate
+
+Plastid raw data, regular linear model.
+
+```{r}
+pt_lm_genome_rate <- summary(lm(pt_ds_div_mya~I(plastome_length/1000),data=dataset_dr_brnch_c_and_seq_est)) 
+
+pt_lm_genome_rate_t <- pt_lm_genome_rate$coefficients[2,][3]
+pt_lm_genome_rate_p <- pt_lm_genome_rate$coefficients[2,][4]
+```
+
+Plastid raw data, PGLS.
+
+```{r}
+pt_gls_genome_rate <- summary(gls(pt_ds_div_mya~I(plastome_length/1000),data=dataset_dr_brnch_c_and_seq_est,correlation = bm.dataset_dr_brnch_c_and_seq_est))
+
+pt_gls_genome_rate_t <- pt_gls_genome_rate$tTable[2,][3]
+pt_gls_genome_rate_p <- pt_gls_genome_rate$tTable[2,][4]
+```
+
+Plastid log10 data, regular linear model.
+
+```{r}
+pt_log_lm_genome_rate <- summary(lm(log10(pt_ds_div_mya)~log10(plastome_length/1000),data=dataset_dr_brnch_c_and_seq_est))
+
+pt_log_lm_genome_rate_t <- pt_log_lm_genome_rate$coefficients[2,][3]
+pt_log_lm_genome_rate_p <- pt_log_lm_genome_rate$coefficients[2,][4]
+```
+
+Plastid log10 data, PGLS.
+
+```{r}
+pt_log_gls_genome_rate <- summary(gls(log10(pt_ds_div_mya)~log10(plastome_length/1000),data=dataset_dr_brnch_c_and_seq_est,correlation = bm.dataset_dr_brnch_c_and_seq_est))
+
+pt_log_gls_genome_rate_t <- pt_log_gls_genome_rate$tTable[2,][3]
+pt_log_gls_genome_rate_p <- pt_log_gls_genome_rate$tTable[2,][4]
+```
+
+```{r}
+p_t_values <- tibble(analysis= character(),t = numeric(),p = numeric())
+
+p_t_values <- p_t_values %>% 
+  add_row(analysis="mito_lm_rate_copy",p=mito_lm_rate_copy_p,t=mito_lm_rate_copy_t) %>%
+  add_row(analysis="mito_gls_rate_copy",p=mito_gls_rate_copy_p,t=mito_gls_rate_copy_t) %>%
+  add_row(analysis="mito_log_lm_rate_copy",p=mito_log_lm_rate_copy_p,t=mito_log_lm_rate_copy_t) %>%
+  add_row(analysis="mito_log_gls_rate_copy",p=mito_log_gls_rate_copy_p,t=mito_log_gls_rate_copy_t) %>%
+  
+  add_row(analysis="pt_lm_rate_copy",p=pt_lm_rate_copy_p,t=pt_lm_rate_copy_t) %>%
+  add_row(analysis="pt_gls_rate_copy",p=pt_gls_rate_copy_p,t=pt_gls_rate_copy_t) %>%
+  add_row(analysis="pt_log_lm_rate_copy",p=pt_log_lm_rate_copy_p,t=pt_log_lm_rate_copy_t) %>%
+  add_row(analysis="pt_log_gls_rate_copy",p=pt_log_gls_rate_copy_p,t=pt_log_gls_rate_copy_t) %>%
+  
+  add_row(analysis="mito_lm_genome_copy",p=mito_lm_genome_copy_p,t=mito_lm_genome_copy_t) %>%
+  add_row(analysis="mito_gls_genome_copy",p=mito_gls_genome_copy_p,t=mito_gls_genome_copy_t) %>%
+  add_row(analysis="mito_log_lm_genome_copy",p=mito_log_lm_genome_copy_p,t=mito_log_lm_genome_copy_t) %>%
+  add_row(analysis="mito_log_gls_genome_copy",p=mito_log_gls_genome_copy_p,t=mito_log_gls_genome_copy_t) %>%
+  
+  add_row(analysis="pt_lm_genome_copy",p=pt_lm_genome_copy_p,t=pt_lm_genome_copy_t) %>%
+  add_row(analysis="pt_gls_genome_copy",p=pt_gls_genome_copy_p,t=pt_gls_genome_copy_t) %>%
+  add_row(analysis="pt_log_lm_genome_copy",p=pt_log_lm_genome_copy_p,t=pt_log_lm_genome_copy_t) %>%
+  add_row(analysis="pt_log_gls_genome_copy",p=pt_log_gls_genome_copy_p,t=pt_log_gls_genome_copy_t) %>%
+
+  add_row(analysis="mito_lm_genome_rate",p=mito_lm_genome_rate_p,t=mito_lm_genome_rate_t) %>%
+  add_row(analysis="mito_gls_genome_rate",p=mito_gls_genome_rate_p,t=mito_gls_genome_rate_t) %>%
+  add_row(analysis="mito_log_lm_genome_rate",p=mito_log_lm_genome_rate_p,t=mito_log_lm_genome_rate_t) %>%
+  add_row(analysis="mito_log_gls_genome_rate",p=mito_log_gls_genome_rate_p,t=mito_log_gls_genome_rate_t) %>%
+  
+  add_row(analysis="pt_lm_genome_rate",p=pt_lm_genome_rate_p,t=pt_lm_genome_rate_t) %>%
+  add_row(analysis="pt_gls_genome_rate",p=pt_gls_genome_rate_p,t=pt_gls_genome_rate_t) %>%
+  add_row(analysis="pt_log_lm_genome_rate",p=pt_log_lm_genome_rate_p,t=pt_log_lm_genome_rate_t) %>%
+  add_row(analysis="pt_log_gls_genome_rate",p=pt_log_gls_genome_rate_p,t=pt_log_gls_genome_rate_t) 
+ 
+p_t_values %>% print(n=40)
+```
+
+#Dn analysis
+
+```{r}
+#Define a list of tip species to drop from the tree -- the species with NAs. Use double quotes around any names with single quotes.
+#These are the species that had short branches
+tips_tree_2=c('Pelargonium_australe',
+              'Pelargonium_exstipulatum',
+              'Plantago_rugelii',
+              'Silene_noctiflora'
+)
+
+#Remove tips
+tree_2<-drop.tip(phy=tree_1, tips_tree_2)
+
+#filters out plastid data with zero for dn
+plastid_dn_dataset <-filter(dataset_dr_brnch_c_and_seq_est, pt_dn!=0)
+
+#sets species data for new dataset for bm
+species_dn = plastid_dn_dataset$Species
+
+#creates new bm data for plastid gls
+bm.dataset_dr_brnch_c_and_seq_est_dn<-corBrownian(phy=tree_2,form=~species_dn)
+
+#Models for mito dn change and copy num
+mito_log_lm_dn_copy <- summary(lm(log10(mito_dn/time..mya.)~log10(mito_copy),data=dataset_dr_brnch_c_and_seq_est)) #regular lm
+mito_log_lm_dn_copy_t <- mito_log_lm_dn_copy$coefficients[2,][3] #t
+mito_log_lm_dn_copy_p <- mito_log_lm_dn_copy$coefficients[2,][4] #p
+
+mito_log_gls_dn_copy <- summary(gls(log10(mito_dn/time..mya.)~log10(mito_copy),data=dataset_dr_brnch_c_and_seq_est,correlation = bm.dataset_dr_brnch_c_and_seq_est))$tTable #gls
+mito_log_gls_dn_copy_t <- mito_log_gls_dn_copy[2,][3] #t
+mito_log_gls_dn_copy_p <- mito_log_gls_dn_copy[2,][4] #p
+
+#Models for pt dn change and copy num
+pt_log_lm_dn_copy<- summary(lm(log10(pt_dn/time..mya.)~log10(plastid_copy),data=plastid_dn_dataset)) #regular lm
+pt_log_lm_dn_copy_t <- pt_log_lm_dn_copy$coefficients[2,][3] #t
+pt_log_lm_dn_copy_p <- pt_log_lm_dn_copy$coefficients[2,][4] #p
+
+pt_log_gls_dn_copy <- summary(gls(log10(pt_dn/time..mya.)~log10(plastid_copy),data=plastid_dn_dataset,correlation = bm.dataset_dr_brnch_c_and_seq_est_dn))$tTable #gls
+pt_log_gls_dn_copy_t <- pt_log_gls_dn_copy[2,][3] #t
+pt_log_gls_dn_copy_p <- pt_log_gls_dn_copy[2,][4] #p
+
+#Models for mito dn change and genome estimate
+mito_log_lm_dn_genome<-summary(lm(log10(mito_dn/time..mya.)~log10(mt_genome_estimate/1000),data=dataset_dr_brnch_c_and_seq_est)) #regular lm
+mito_log_lm_dn_genome_t <- mito_log_lm_dn_genome$coefficients[2,][3] #t
+mito_log_lm_dn_genome_p <- mito_log_lm_dn_genome$coefficients[2,][4] #p
+
+mito_log_gls_dn_genome<-summary(gls(log10(mito_dn/time..mya.)~log10(mt_genome_estimate/1000),data=dataset_dr_brnch_c_and_seq_est,correlation = bm.dataset_dr_brnch_c_and_seq_est))$tTable #gls
+mito_log_gls_dn_genome_t <- mito_log_gls_dn_genome[2,][3] #t
+mito_log_gls_dn_genome_p <- mito_log_gls_dn_genome[2,][4] #p
+
+#Models for pt dn change and plastome length
+pt_log_lm_dn_genome <- summary(lm(log10(pt_dn/time..mya.)~log10(plastome_length/1000),data=plastid_dn_dataset)) #regular lm
+pt_log_lm_dn_genome_t <- pt_log_lm_dn_genome$coefficients[2,][3] #t
+pt_log_lm_dn_genome_p <- pt_log_lm_dn_genome$coefficients[2,][4] #p
+
+pt_log_gls_dn_genome <- summary(gls(log10(pt_dn/time..mya.)~log10(plastome_length/1000),data=plastid_dn_dataset,correlation = bm.dataset_dr_brnch_c_and_seq_est_dn))$tTable #gls
+pt_log_gls_dn_genome_t <- pt_log_gls_dn_genome[2,][3] #t
+pt_log_gls_dn_genome_p <- pt_log_gls_dn_genome[2,][4] #p
+
+```
+
+
+#dn/ds analysis
+
+```{r}
+mt_log_lm_dn_ds_copy <- summary(lm(log10(mito_dn/mt_ds)~log10(mito_copy),data=dataset_dr_brnch_c_and_seq_est)) #regular lm
+mt_log_lm_dn_ds_copy_t <- mt_log_lm_dn_ds_copy$coefficients[2,][3] #t
+mt_log_lm_dn_ds_copy_p <- mt_log_lm_dn_ds_copy$coefficients[2,][4] #p
+mt_log_lm_dn_ds_copy
+
+mt_log_gls_dn_ds_copy <- summary(gls(log10(mito_dn/mt_ds)~log10(mito_copy),data=dataset_dr_brnch_c_and_seq_est,correlation = bm.dataset_dr_brnch_c_and_seq_est))$tTable #gls
+mt_log_gls_dn_ds_copy_t <- mt_log_gls_dn_ds_copy[2,][3] #t
+mt_log_gls_dn_ds_copy_p <- mt_log_gls_dn_ds_copy[2,][4] #p
+mt_log_gls_dn_ds_copy
+
+
+#Models for pt dn change and plastome length
+pt_log_lm_dn_ds_copy <- summary(lm(log10(pt_dn/pt_ds)~log10(plastid_copy),data=plastid_dn_dataset)) #regular lm
+pt_log_lm_dn_ds_copy_t <- pt_log_lm_dn_ds_copy$coefficients[2,][3] #t
+pt_log_lm_dn_ds_copy_p <- pt_log_lm_dn_ds_copy$coefficients[2,][4] #p
+pt_log_lm_dn_ds_copy
+
+pt_log_gls_dn_ds_copy <- summary(gls(log10(pt_dn/pt_ds)~log10(plastid_copy),data=plastid_dn_dataset,correlation = bm.dataset_dr_brnch_c_and_seq_est_dn))$tTable #gls
+pt_log_gls_dn_ds_copy_t <- pt_log_gls_dn_ds_copy[2,][3] #t
+pt_log_gls_dn_ds_copy_p <- pt_log_gls_dn_ds_copy[2,][4] #p
+pt_log_gls_dn_ds_copy
+
+mt_log_lm_dn_ds_genome <- summary(lm(log10(mito_dn/mt_ds)~log10(mt_genome_estimate/1000),data=dataset_dr_brnch_c_and_seq_est)) #regular lm
+mt_log_lm_dn_ds_genome_t <- mt_log_lm_dn_ds_copy$coefficients[2,][3] #t
+mt_log_lm_dn_ds_genome_p <- mt_log_lm_dn_ds_copy$coefficients[2,][4] #p
+
+mt_log_gls_dn_ds_genome <- summary(gls(log10(mito_dn/mt_ds)~log10(mt_genome_estimate/1000),data=dataset_dr_brnch_c_and_seq_est,correlation = bm.dataset_dr_brnch_c_and_seq_est))$tTable #gls
+mt_log_gls_dn_ds_genome_t <- mt_log_gls_dn_ds_genome[2,][3] #t
+mt_log_gls_dn_ds_genome_p <- mt_log_gls_dn_ds_genome[2,][4] #p
+
+#Models for pt dn change and plastome length
+pt_log_lm_dn_ds_genome <- summary(lm(log10(pt_dn/pt_ds)~log10(plastome_length/1000),data=plastid_dn_dataset)) #regular lm
+pt_log_lm_dn_ds_genome_t <- pt_log_lm_dn_ds_genome$coefficients[2,][3] #t
+pt_log_lm_dn_ds_genome_p <- pt_log_lm_dn_ds_genome$coefficients[2,][4] #p
+
+pt_log_gls_dn_ds_genome <- summary(gls(log10(pt_dn/pt_ds)~log10(plastome_length/1000),data=plastid_dn_dataset,correlation = bm.dataset_dr_brnch_c_and_seq_est_dn))$tTable #gls
+pt_log_gls_dn_ds_genome_t <- pt_log_gls_dn_ds_genome[2,][3] #t
+pt_log_gls_dn_ds_genome_p <- pt_log_gls_dn_ds_genome[2,][4] #p
+```
+
+
+C value and ddpcr correlations
+
+```{r}
+c_value_dataset_angiosperms = filter(copy_dataset_dropped_tips_c_val,Group!="Gymnosperms")
+
+summary(lm(log10(mito_copy_c)~0+log10(mito_copy), data=c_value_dataset_angiosperms))
+
+plot(log10(mito_copy_c)~0+log10(mito_copy),data=c_value_dataset_angiosperms)
+
+plot(mito_copy_c~mito_copy,data=c_value_dataset_angiosperms)
+
+summary(lm(log10(plastid_copy_c)~0+log10(plastid_copy),data=c_value_dataset_angiosperms))
+
+summary(lm(log10(ddpcr_mito)~0+log10(mito_copy_seq), data=copy_data))
+
+summary(lm(log10(ddpcr_plastid)~0+log10(plastid_copy_seq), data=copy_data))
+
+summary(lm(log10(ddpcr_mito)~log10(mito_copy_seq), data=copy_data))
+
+summary(lm(log10(ddpcr_plastid)~log10(plastid_copy_seq), data=copy_data))
+
+```
+
+```{r}
+summary(lm(formula = log(plastid_copy_c) ~ log(plastid_copy), data = c_value_dataset_angiosperms))
+```
+
+## Within Group Stats
+```{r}
+
+Sileneae <- dataset_dr_brnch_c_and_seq_est %>% filter(Group=="Sileneae")
+Plantagineae <- dataset_dr_brnch_c_and_seq_est %>% filter(Group=="Plantagineae")
+Geraniales <- dataset_dr_brnch_c_and_seq_est %>% filter(Group=="Geraniales")
+Gymnosperms <- dataset_dr_brnch_c_and_seq_est %>% filter(Group=="Gymnosperms")
+
+summary(lm(log10(mt_ds_div_mya)~log10(mito_copy),data=Sileneae))
+summary(lm(log10(mt_ds_div_mya)~log10(mito_copy),data=Plantagineae))
+summary(lm(log10(mt_ds_div_mya)~log10(mito_copy),data=Geraniales))
+summary(lm(log10(mt_ds_div_mya)~log10(mito_copy),data=Gymnosperms))
+
+summary(lm(log10(pt_ds_div_mya)~log10(plastid_copy),data=Sileneae))
+summary(lm(log10(pt_ds_div_mya)~log10(plastid_copy),data=Plantagineae))
+summary(lm(log10(pt_ds_div_mya)~log10(plastid_copy),data=Geraniales))
+summary(lm(log10(pt_ds_div_mya)~log10(plastid_copy),data=Gymnosperms))
+
+
+summary(lm(log10(mt_genome_estimate)~log10(mito_copy),data=Sileneae))
+summary(lm(log10(mt_genome_estimate)~log10(mito_copy),data=Plantagineae))
+summary(lm(log10(mt_genome_estimate)~log10(mito_copy),data=Geraniales))
+summary(lm(log10(mt_genome_estimate)~log10(mito_copy),data=Gymnosperms))
+
+summary(lm(log10(plastome_length)~log10(plastid_copy),data=Sileneae))
+summary(lm(log10(plastome_length)~log10(plastid_copy),data=Plantagineae))
+summary(lm(log10(plastome_length)~log10(plastid_copy),data=Geraniales))
+summary(lm(log10(plastome_length)~log10(plastid_copy),data=Gymnosperms))
+```
+
+##wilcox test
+```{r}
+angiosperms <- filter(copy_dataset_dropped_tips_c_val, Group!="Gymnosperms")
+
+gymnosperms <- filter(copy_dataset_dropped_tips_c_val, Group=="Gymnosperms")
+
+wilcox.test(angiosperms$pt_ds_div_mya, gymnosperms$pt_ds_div_mya)
+```
+
+##Copy number statistics for c value
+
+```{r}
+##This repeats analysis for c value
+#Define a list of tip species to drop from the tree -- the species with NAs. Use double quotes around any names with single quotes.
+#These are the species that had short branches
+tips_tree_2=c('Abies_sibirica',
+'Agrostemma_githago',
+'Arabidopsis_thaliana',
+'Ceratozamia_hildae',
+'Cupressus_sempervirens',
+'Erodium_chrysanthum',
+'Erodium_gruinum',
+'Erodium_moschatum',
+'Erodium_texanum',
+'Erodium_trifolium',
+'Geranium_brycei',
+'Geranium_incanum',
+'Geranium_maderense',
+'Geranium_phaeum',
+'Geranium_sanguineum',
+'Ginkgo_biloba',
+'Gnetum_gnemon',
+'Hesperocyparis_glabra',
+'Melianthus_villosus',
+'Nicotiana_tabacum',
+'Pelargonium_australe',
+'Pelargonium_citronellum',
+'Pelargonium_cotyledonis',
+'Pelargonium_exstipulatum',
+'Pelargonium_fulgidum',
+'Pelargonium_hortorum',
+'Pelargonium_myrrhifolium',
+'Pelargonium_tetragonum',
+'Pelargonium_transvaalense',
+'Picea_abies',
+'Plantago_arenaria',
+'Plantago_aristata',
+'Plantago_coronopus',
+'Plantago_crassifolia',
+'Plantago_depressa',
+'Plantago_elongata',
+'Plantago_maritima',
+'Plantago_media',
+'Plantago_rigida',
+'Plantago_rugelii',
+'Plantago_sericea',
+'Plantago_tenuiflora',
+'Podocarpus_macrophyllus',
+'Silene_conica',
+'Silene_latifolia',
+'Silene_noctiflora',
+'Silene_vulgaris',
+'Taxus_baccata',
+'Welwitschia_mirabilis',
+'Zamia_integrifolia',
+'Zea_mays'
+)
+
+#Remove tips
+tree_2<-keep.tip(phy=tree, tips_tree_2)
+
+tree_2$edge.length<-rep(1,114)  ##IMPORTANT this line makes the tree have equal branch lengths.
+
+
+#Check that tip-removal worked
+plot(tree_2,cex=0.3  )
+
+species2 = copy_dataset_dropped_tips_c_val$Species
+bm.dataset_dr_brnch_c_est<-corBrownian(phy=tree_2,form=~species2)
+
+bm.dataset_dr_brnch_c_est
+copy_dataset_dropped_tips_c_val
+
+
+
+summary(lm(log10(mt_ds_div_mya)~log10(mito_copy_c),data=copy_dataset_dropped_tips_c_val))
+
+summary(gls(log10(mt_ds_div_mya)~log10(mito_copy_c),data=copy_dataset_dropped_tips_c_val,correlation = bm.dataset_dr_brnch_c_est))$tTable
+
+summary(lm(log10(pt_ds_div_mya)~log10(plastid_copy_c),data=copy_dataset_dropped_tips_c_val))
+
+summary(gls(log10(pt_ds_div_mya)~log10(plastid_copy_c),data=copy_dataset_dropped_tips_c_val,correlation = bm.dataset_dr_brnch_c_est))$tTable
+
+summary(lm(log10(mito_copy)~log10(mito_copy_c), c_value_dataset_angiosperms))
+
+summary(lm(log10(plastid_copy)~log10(plastid_copy_c), c_value_dataset_angiosperms))
+
+
+
+summary(lm(log10(mt_genome_estimate)~log10(mito_copy_c),data=copy_dataset_dropped_tips_c_val))
+
+summary(gls(log10(mt_genome_estimate)~log10(mito_copy_c),data=copy_dataset_dropped_tips_c_val,correlation = bm.dataset_dr_brnch_c_est))$tTable
+
+summary(lm(log10(plastome_length)~log10(plastid_copy_c),data=copy_dataset_dropped_tips_c_val))
+
+summary(gls(log10(plastome_length)~log10(plastid_copy_c),data=copy_dataset_dropped_tips_c_val,correlation = bm.dataset_dr_brnch_c_est))$tTable
+
+
+summary(lm(plastid_copy_seq~ddpcr_plastid,data=copy_data))
+
+summary(lm(mito_copy_seq~ddpcr_mito,data=copy_data))
+```
+
+
